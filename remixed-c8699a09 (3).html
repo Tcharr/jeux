@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jeu de Devinettes</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.6.8/firebase-app.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.6.8/firebase-database.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);height:100vh;overflow:hidden;padding:0}
+.container{max-width:1400px;height:100vh;margin:0 auto;padding:8px}
+.page{display:none;background:#1e1e2e;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5);padding:12px 20px;color:#e0e0e0;height:calc(100vh - 16px);overflow:hidden}
+.page.active{display:flex;flex-direction:column}
+h1{text-align:center;color:#6c8fff;margin-bottom:8px;font-size:1.4em}
+.home-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:1100px;margin:10px auto;flex:1}
+.home-card{background:rgba(108,143,255,.1);padding:16px 12px;border-radius:12px;text-align:center;transition:transform .3s;border:1px solid rgba(108,143,255,.2);cursor:pointer;display:flex;flex-direction:column;justify-content:center}
+.home-card:hover{transform:translateY(-3px)}
+.home-icon{font-size:2.2em;margin-bottom:8px}
+.home-title{font-size:1.1em;font-weight:bold;color:#6c8fff;margin-bottom:6px}
+.home-desc{color:#b0b0b0;margin-bottom:12px;line-height:1.4;font-size:.8em}
+.home-card.multi .home-title{color:#f093fb}
+.home-card.multi{border-color:rgba(240,147,251,.3);background:rgba(240,147,251,.08)}
+.btn{background:linear-gradient(135deg,#6c8fff 0%,#4a69ff 100%);color:#fff;border:none;padding:8px 18px;border-radius:25px;font-size:.85em;cursor:pointer;transition:transform .2s;font-weight:bold}
+.btn:hover{transform:scale(1.05)}
+.btn.success{background:linear-gradient(135deg,#28a745 0%,#20c997 100%)}
+.btn.danger{background:linear-gradient(135deg,#f5576c 0%,#f093fb 100%)}
+.btn.secondary{background:linear-gradient(135deg,#6c757d 0%,#495057 100%)}
+.btn.purple{background:linear-gradient(135deg,#f093fb 0%,#764ba2 100%)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0}
+.page-header h1{margin:0;font-size:1.3em}
+.db-controls{display:flex;gap:15px;margin-bottom:30px;flex-wrap:wrap;align-items:center}
+.file-input-label{display:inline-block;background:linear-gradient(135deg,#6c8fff 0%,#4a69ff 100%);color:#fff;padding:12px 25px;border-radius:25px;cursor:pointer;font-weight:bold;transition:transform .2s}
+.file-input-label:hover{transform:scale(1.05)}
+input[type="file"]{display:none}
+table{width:100%;border-collapse:collapse;margin-bottom:20px}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #333}
+th{background:linear-gradient(135deg,#6c8fff 0%,#4a69ff 100%);color:#fff;font-weight:bold}
+tr:hover td{background:rgba(255,255,255,.03)}
+.action-btn{padding:6px 12px;border:none;border-radius:5px;cursor:pointer;font-size:.9em;font-weight:bold;margin-right:5px}
+.edit-btn{background:#ffc107;color:#333}
+.delete-btn{background:#dc3545;color:#fff}
+.modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.5);align-items:center;justify-content:center;overflow-y:auto;padding:20px}
+.modal.show{display:flex}
+.modal-content{background:#1e1e2e;color:#e0e0e0;padding:40px;border-radius:20px;max-width:800px;width:100%;max-height:90vh;overflow-y:auto;border:1px solid rgba(108,143,255,.3)}
+.modal-content h2{color:#6c8fff;margin-bottom:20px}
+.form-group{margin-bottom:20px}
+.form-group label{display:block;font-weight:bold;color:#6c8fff;margin-bottom:8px}
+.form-group input{width:100%;padding:10px;border:2px solid #333;border-radius:8px;font-size:1em;background:#2a2a3e;color:#e0e0e0}
+.form-group input:focus{outline:none;border-color:#6c8fff}
+.indices-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}
+.game-layout{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;min-height:calc(100vh - 180px)}
+.game-left,.game-right{display:flex;flex-direction:column}
+.score{text-align:center;font-size:1em;color:#6c8fff;font-weight:bold;margin-bottom:12px;padding:10px;background:rgba(108,143,255,.1);border-radius:10px}
+.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;flex-shrink:0}
+.info-item{background:#2a2a3e;border-radius:8px;padding:8px}
+.info-label{font-weight:bold;color:#6c8fff;margin-bottom:4px;font-size:.7em;text-transform:uppercase}
+.info-value{font-size:.8em;color:#b0b0b0;min-height:18px}
+.info-value.hidden{filter:blur(8px);user-select:none}
+.reveal-btn{background:linear-gradient(135deg,#6c8fff 0%,#764ba2 100%);color:#fff;border:none;padding:4px 10px;border-radius:12px;font-size:.65em;cursor:pointer;font-weight:bold;margin-top:4px}
+.reveal-btn:disabled{opacity:.5;cursor:not-allowed}
+.indices-section{background:#2a2a3e;border-left:4px solid #6c8fff;border-radius:8px;padding:8px;margin-bottom:8px;flex-shrink:0}
+.indices-title{font-weight:bold;color:#b0b0b0;margin-bottom:6px;font-size:.8em}
+.indice-item{background:#232335;padding:6px;border-radius:6px;min-height:60px;margin-bottom:6px}
+.indice-label{font-weight:bold;color:#b0b0b0;font-size:.7em;margin-bottom:3px}
+.indice-value{color:#e0e0e0;font-size:.75em;word-wrap:break-word;white-space:normal;overflow-wrap:break-word}
+.indice-value.hidden{filter:blur(8px);user-select:none}
+.answer-section{display:flex;flex-direction:column;flex-grow:1;overflow:hidden}
+.answer-controls{background:#151520;border-radius:10px;padding:12px;margin-bottom:10px;flex-shrink:0;position:relative}
+.answer-input{width:100%;padding:10px;border:2px solid #333;border-radius:8px;font-size:.95em;margin-bottom:10px;background:#2a2a3e;color:#e0e0e0}
+.answer-input:focus{outline:none;border-color:#6c8fff}
+.suggestions-list{position:absolute;background:#1e1e2e;border:2px solid #6c8fff;border-radius:10px;max-height:150px;overflow-y:auto;width:calc(100% - 30px);z-index:100;box-shadow:0 5px 15px rgba(0,0,0,.5);display:none}
+.suggestions-list.show{display:block}
+.suggestion-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #333;font-size:.9em;color:#e0e0e0}
+.suggestion-item:hover{background:rgba(108,143,255,.15)}
+.answer-buttons{display:flex;gap:10px}
+.wrong-answers{background:#151520;border:2px solid #dc3545;border-radius:10px;padding:12px;overflow-y:auto;flex-grow:1;max-height:300px}
+.wrong-answers-title{font-weight:bold;color:#dc3545;margin-bottom:8px;font-size:.9em}
+.wrong-answer-item{background:#2a1a1e;color:#f5a0a8;padding:6px 10px;border-radius:6px;margin-bottom:5px;font-size:.85em}
+.feedback{text-align:center;padding:10px;border-radius:8px;margin-top:10px;font-weight:bold;font-size:.9em;display:none}
+.feedback.correct{background:#d4edda;color:#155724}
+.empty-state{text-align:center;padding:60px 20px;color:#666}
+.empty-icon{font-size:4em;margin-bottom:20px}
+.tab-btn{background:transparent;border:none;padding:12px 24px;cursor:pointer;font-size:1em;font-weight:bold;color:#666;border-bottom:3px solid transparent;transition:all .3s}
+.tab-btn:hover{color:#6c8fff}
+.tab-btn.active{color:#6c8fff;border-bottom-color:#6c8fff}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.score-item{display:flex;justify-content:space-between;align-items:center;padding:15px;background:rgba(108,143,255,.1);border-radius:10px;margin-bottom:10px}
+.score-rank{font-size:1.5em;font-weight:bold;color:#6c8fff;width:40px}
+.score-info{flex:1;margin-left:15px}
+.score-pseudo{font-size:1.1em;font-weight:bold;color:#e0e0e0}
+.score-date{font-size:.85em;color:#888}
+.score-points{font-size:1.3em;font-weight:bold;color:#28a745}
+.multi-container{max-width:700px;margin:0 auto;padding:20px 0}
+.multi-card{background:#2a2a3e;border-radius:16px;padding:35px;margin-bottom:20px;border:1px solid rgba(240,147,251,.3)}
+.multi-card h3{color:#f093fb;font-size:1.4em;margin-bottom:20px}
+.multi-input{width:100%;padding:14px;border:2px solid #444;border-radius:10px;font-size:1.1em;background:#1a1a2e;color:#e0e0e0;margin-bottom:15px;text-align:center;letter-spacing:3px;text-transform:uppercase}
+.multi-input:focus{outline:none;border-color:#f093fb}
+.room-code{font-size:3em;font-weight:bold;color:#f093fb;letter-spacing:8px;text-align:center;background:#1a1a2e;padding:20px;border-radius:12px;margin:15px 0;cursor:pointer;border:2px dashed rgba(240,147,251,.4)}
+.player-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#1e1e2e;border-radius:8px;margin-bottom:8px;color:#e0e0e0}
+.player-badge{background:linear-gradient(135deg,#f093fb,#764ba2);color:#fff;padding:3px 10px;border-radius:12px;font-size:.75em;font-weight:bold}
+.timer-bar{height:8px;background:#333;border-radius:4px;overflow:hidden;margin-bottom:12px}
+.timer-fill{height:100%;border-radius:4px;transition:width 1s linear;background:linear-gradient(90deg,#28a745,#6c8fff)}
+.timer-fill.urgent{background:linear-gradient(90deg,#dc3545,#f5576c)}
+.timer-text{text-align:center;font-size:1.1em;font-weight:bold;color:#6c8fff;margin-bottom:8px}
+.multi-scoreboard{background:#1e1e2e;border-radius:12px;padding:15px;margin-top:10px}
+.multi-scoreboard h4{color:#f093fb;margin-bottom:12px;font-size:1em}
+.sb-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;margin-bottom:5px;font-size:.9em;color:#e0e0e0}
+.sb-item.me{background:rgba(108,143,255,.2);border-left:3px solid #6c8fff}
+.sb-item.answered{background:rgba(40,167,69,.1)}
+.answered-tag{background:#28a745;color:#fff;padding:2px 8px;border-radius:10px;font-size:.75em}
+.waiting-tag{background:#666;color:#fff;padding:2px 8px;border-radius:10px;font-size:.75em}
+.fb-status{text-align:center;padding:8px;border-radius:8px;margin-bottom:15px;font-size:.85em;font-weight:bold}
+.fb-status.ok{background:rgba(40,167,69,.2);color:#28a745;border:1px solid #28a745}
+.fb-status.err{background:rgba(220,53,69,.2);color:#dc3545;border:1px solid #dc3545}
+.fb-status.loading{background:rgba(108,143,255,.2);color:#6c8fff;border:1px solid #6c8fff}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div id="homePage" class="page active">
+  <h1>🎯 Jeu de Devinettes</h1>
+  <p style="text-align:center;color:#888;font-size:1.1em;margin-bottom:10px">Choisissez votre mode :</p>
+  <div class="home-cards">
+    <div class="home-card" onclick="goToPage('database')">
+      <div class="home-icon">📊</div>
+      <div class="home-title">Base de données</div>
+      <div class="home-desc">Gérez vos devinettes : ajoutez, modifiez et supprimez des entrées</div>
+      <button class="btn">Accéder →</button>
+    </div>
+    <div class="home-card" onclick="showGameModeSelection()">
+      <div class="home-icon">🎮</div>
+      <div class="home-title">Jouer solo</div>
+      <div class="home-desc">Testez vos connaissances en mode normal ou entraînement</div>
+      <button class="btn success">Jouer →</button>
+    </div>
+    <div class="home-card multi" onclick="goToMulti()">
+      <div class="home-icon">👥</div>
+      <div class="home-title">Multijoueur</div>
+      <div class="home-desc">Créez ou rejoignez une salle en ligne et jouez entre amis en temps réel</div>
+      <button class="btn purple">Jouer en ligne →</button>
+    </div>
+  </div>
+  <p style="text-align:center;color:#666;margin-top:20px"><strong>📈 Total :</strong> <span id="homeCount">0</span> devinette(s)</p>
+  <div style="max-width:800px;margin:30px auto;background:#2a2a3e;padding:30px;border-radius:15px">
+    <h2 style="text-align:center;color:#6c8fff;margin-bottom:20px">🏆 Top 5 Meilleurs Scores</h2>
+    <div id="topScoresContainer"></div>
+  </div>
+</div>
+
+<div id="databasePage" class="page">
+  <div class="page-header">
+    <h1>📊 Base de Données</h1>
+    <button class="btn secondary" onclick="goToPage('home')">← Retour</button>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:20px;border-bottom:2px solid #333">
+    <button class="tab-btn active" onclick="switchTab('entries')">📝 Entrées</button>
+    <button class="tab-btn" onclick="switchTab('stats')">📈 Statistiques</button>
+    <button class="tab-btn" onclick="switchTab('scores')">🏆 Scores</button>
+  </div>
+  <div id="entriesTab" class="tab-content active">
+    <div class="db-controls">
+      <button class="btn success" id="addEntryBtn">➕ Ajouter</button>
+      <label for="excelImport" class="file-input-label">📁 Importer Excel</label>
+      <input type="file" id="excelImport" accept=".xlsx,.xls">
+      <button class="btn" onclick="exportToExcel()">💾 Exporter Excel</button>
+      <button class="btn danger" onclick="clearDatabase()">🗑️ Vider</button>
+      <span style="margin-left:auto;padding:12px;font-weight:bold;color:#6c8fff">Total: <span id="dbCount">0</span></span>
+    </div>
+    <div id="tableContainer"></div>
+  </div>
+  <div id="statsTab" class="tab-content"><div id="statsTabContent"></div></div>
+  <div id="scoresTab" class="tab-content"><div id="scoresTabContent"></div></div>
+</div>
+
+<div id="gamePage" class="page">
+  <div class="page-header">
+    <h1>🎮 Jeu</h1>
+    <button class="btn secondary" onclick="goToPage('home')">← Retour</button>
+  </div>
+  <div id="gameContent"></div>
+</div>
+
+<div id="multiPage" class="page">
+  <div class="page-header">
+    <h1>👥 Multijoueur</h1>
+    <button class="btn secondary" onclick="leaveMulti()">← Retour</button>
+  </div>
+  <div id="fbStatus" class="fb-status loading">🔄 Connexion Firebase en cours...</div>
+  <div id="multiContent"></div>
+</div>
+
+</div>
+
+<div id="entryModal" class="modal">
+  <div class="modal-content">
+    <h2 id="modalTitle">Ajouter une entrée</h2>
+    <form id="entryForm">
+      <div class="form-group"><label>Nom (Réponse) *</label><input type="text" id="inputNom" required></div>
+      <div class="form-group"><label>Type *</label><input type="text" id="inputType" required></div>
+      <div class="form-group"><label>Précision type</label><input type="text" id="inputPrecisionType"></div>
+      <div class="form-group"><label>Précision type 2</label><input type="text" id="inputPrecisionType2"></div>
+      <div class="form-group"><label>Date début</label><input type="text" id="inputDateDebut"></div>
+      <div class="form-group"><label>Date fin</label><input type="text" id="inputDateFin"></div>
+      <div class="form-group"><label>Nationalité</label><input type="text" id="inputNationalite"></div>
+      <div class="form-group">
+        <label>Indices (optionnels)</label>
+        <div class="indices-grid" id="indicesInputGrid"></div>
+      </div>
+      <div style="display:flex;gap:15px;margin-top:30px">
+        <button type="submit" class="btn success">💾 Enregistrer</button>
+        <button type="button" class="btn danger" onclick="closeModal()">❌ Annuler</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// ── CONFIG FIREBASE ────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyB4hQR6G-mf54AmVvh-2jfCUdHKU3geTGA",
+  authDomain: "jeux-e6059.firebaseapp.com",
+  databaseURL: "https://jeux-e6059-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "jeux-e6059",
+  storageBucket: "jeux-e6059.firebasestorage.app",
+  messagingSenderId: "615119778998",
+  appId: "1:615119778998:web:5b28643389d22f5311e217"
+};
+
+// ── INIT FIREBASE ──────────────────────────────────────
+let db = null;
+let fbReady = false;
+
+function initFirebase() {
+  setFbStatus('loading', '🔄 Chargement Firebase...');
+  // Attendre que les scripts soient chargés
+  let attempts = 0;
+  const tryInit = () => {
+    attempts++;
+    if (typeof firebase === 'undefined') {
+      if (attempts < 20) {
+        setFbStatus('loading', '🔄 Attente scripts... tentative ' + attempts);
+        setTimeout(tryInit, 500);
+      } else {
+        setFbStatus('err', '❌ Scripts Firebase non chargés (CDN bloqué). Utilisez le jeu en dehors de Claude.ai.');
+      }
+      return;
+    }
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      fbReady = true;
+      setFbStatus('ok', '✅ Firebase connecté — Multijoueur disponible !');
+    } catch(e) {
+      fbReady = false;
+      setFbStatus('err', '❌ Erreur Firebase : ' + e.message);
+    }
+  };
+  tryInit();
+}
+
+function setFbStatus(type, msg) {
+  const el = document.getElementById('fbStatus');
+  if (!el) return;
+  el.className = 'fb-status ' + type;
+  el.textContent = msg;
+}
+
+// ── STATE ──────────────────────────────────────────────
+let database=[], statistics={}, gameScores=[];
+let currentEditIndex=-1, currentQuestionIndex=0, totalScore=0;
+let currentPoints=25, currentQuestion=null, wrongAnswers=[];
+let gameMode='normal', questionsPerGame=10;
+let currentDbTab='entries';
+
+let myId=null, myPseudo='', roomCode='', isHost=false;
+let multiListeners=[], timerInterval=null, multiPhase='lobby';
+let multiPlayers={}, multiCurrentQ=null, multiQuestionIdx=0;
+let multiTotalScore=0, multiAnswered=false;
+const TIMER_SECONDS=40;
+
+// ── INIT ───────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadDatabase(); loadStatistics();
+  document.getElementById('addEntryBtn').addEventListener('click', openAddModal);
+  document.getElementById('excelImport').addEventListener('change', handleExcelImport);
+  document.getElementById('entryForm').addEventListener('submit', handleFormSubmit);
+  const g = document.getElementById('indicesInputGrid');
+  for(let i=1;i<=10;i++){const inp=document.createElement('input');inp.type='text';inp.id='inputIndice'+i;inp.placeholder='Indice '+i;g.appendChild(inp);}
+  initFirebase();
+});
+
+// ── STORAGE ────────────────────────────────────────────
+function loadDatabase(){
+  const s=localStorage.getItem('devinettesDB');
+  if(s)database=JSON.parse(s);
+  updateDatabaseDisplay();updateHomeCount();
+  // Charger depuis Firebase dès que prêt
+  waitForFirebaseThenLoad();
+}
+
+function waitForFirebaseThenLoad(){
+  if(fbReady&&db){
+    syncFromFirebase();
+  } else {
+    setTimeout(waitForFirebaseThenLoad, 500);
+  }
+}
+
+function syncFromFirebase(){
+  db.ref('questionDatabase').once('value').then(snap=>{
+    if(snap.exists()){
+      const data=snap.val();
+      database=Object.values(data);
+      localStorage.setItem('devinettesDB',JSON.stringify(database));
+      updateDatabaseDisplay();updateHomeCount();
+      showToast('✅ Base de données chargée depuis Firebase ('+database.length+' entrées)');
+    }
+  }).catch(e=>console.log('Pas de données Firebase:', e));
+}
+
+function saveDatabase(){
+  localStorage.setItem('devinettesDB',JSON.stringify(database));
+  updateDatabaseDisplay();updateHomeCount();
+  // Sauvegarder dans Firebase
+  if(fbReady&&db){
+    const obj={};
+    database.forEach((entry,i)=>obj['entry_'+i]=entry);
+    db.ref('questionDatabase').set(obj)
+    .then(()=>showToast('💾 Sauvegardé dans Firebase'))
+    .catch(e=>showToast('⚠️ Erreur sauvegarde Firebase: '+e.message));
+  }
+}
+
+function showToast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:20px;right:20px;background:#2a2a3e;color:#e0e0e0;padding:12px 20px;border-radius:10px;border:1px solid #6c8fff;font-size:.9em;z-index:9999;transition:opacity .5s';document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(window._toastTimer);
+  window._toastTimer=setTimeout(()=>t.style.opacity='0',3000);
+}
+function loadStatistics(){const s=localStorage.getItem('devinettesStats');if(s)statistics=JSON.parse(s);const sc=localStorage.getItem('devinettesScores');if(sc)gameScores=JSON.parse(sc);}
+function saveStatistics(){localStorage.setItem('devinettesStats',JSON.stringify(statistics));}
+function saveGameScores(){localStorage.setItem('devinettesScores',JSON.stringify(gameScores));}
+
+// ── NAVIGATION ─────────────────────────────────────────
+function goToPage(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.getElementById(p+'Page').classList.add('active');
+  if(p==='home') updateHomeCount();
+}
+
+function goToMulti(){
+  if(!database.length){alert('Votre base de données est vide ! Ajoutez des devinettes pour jouer en multi.');return;}
+  goToPage('multi');
+  showMultiLobby();
+}
+
+// ── HOME ───────────────────────────────────────────────
+function updateHomeCount(){
+  document.getElementById('homeCount').textContent=database.length;
+  displayTopScores();
+}
+function displayTopScores(){
+  const c=document.getElementById('topScoresContainer');if(!c)return;
+  if(!gameScores.length){c.innerHTML='<p style="text-align:center;color:#666">Aucun score enregistré.</p>';return;}
+  const top=[...gameScores].sort((a,b)=>b.score-a.score).slice(0,5);
+  c.innerHTML=top.map((s,i)=>{
+    const m=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+    return`<div class="score-item"><div class="score-rank">${m}</div><div class="score-info"><div class="score-pseudo">${s.pseudo}</div><div class="score-date">${s.date}</div></div><div class="score-points">${s.score} pts</div></div>`;
+  }).join('');
+}
+
+// ── DATABASE ───────────────────────────────────────────
+function updateDatabaseDisplay(){
+  document.getElementById('dbCount').textContent=database.length;
+  const c=document.getElementById('tableContainer');
+  if(!database.length){c.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><h3>Aucune entrée</h3><p>Ajoutez des entrées ou importez un fichier Excel</p></div>`;return;}
+  c.innerHTML=`<table><thead><tr><th>Nom</th><th>Type</th><th>Nationalité</th><th>Indices</th><th>Actions</th></tr></thead><tbody>`+
+  database.map((e,i)=>`<tr><td><strong>${e.nom}</strong></td><td>${e.type}</td><td>${e.nationalite||'-'}</td><td>${e.indices.length}</td><td>
+    <button class="action-btn edit-btn" onclick="editEntry(${i})">✏️</button>
+    <button class="action-btn delete-btn" onclick="deleteEntry(${i})">🗑️</button></td></tr>`).join('')+`</tbody></table>`;
+}
+function switchTab(t){
+  currentDbTab=t;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',[`entries`,`stats`,`scores`][i]===t));
+  document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+  document.getElementById(t+'Tab').classList.add('active');
+  if(t==='stats')displayStatsTab();
+  if(t==='scores')displayScoresTab();
+}
+function displayStatsTab(){
+  const c=document.getElementById('statsTabContent');
+  const keys=Object.keys(statistics);
+  if(!keys.length){c.innerHTML=`<div class="empty-state"><div class="empty-icon">📊</div><h3>Aucune statistique</h3></div>`;return;}
+  const arr=keys.map(k=>{const s=statistics[k];const t=s.correct+s.wrong;return{nom:k,...s,total:t,pct:t?Math.round(s.correct/t*100):0};}).sort((a,b)=>b.pct-a.pct);
+  c.innerHTML=`<div style="margin-bottom:15px"><button class="btn danger" onclick="clearStats()">🗑️ Effacer stats</button></div>`+
+  `<table><thead><tr><th>Nom</th><th>✅</th><th>❌</th><th>Total</th><th>%</th></tr></thead><tbody>`+
+  arr.map(s=>`<tr><td><strong>${s.nom}</strong></td><td style="color:#28a745;font-weight:bold">${s.correct}</td><td style="color:#dc3545;font-weight:bold">${s.wrong}</td><td>${s.total}</td><td style="color:${s.pct>=70?'#28a745':s.pct>=40?'#ffc107':'#dc3545'};font-weight:bold">${s.pct}%</td></tr>`).join('')+`</tbody></table>`;
+}
+function displayScoresTab(){
+  const c=document.getElementById('scoresTabContent');
+  if(!gameScores.length){c.innerHTML=`<div class="empty-state"><div class="empty-icon">🏆</div><h3>Aucun score</h3></div>`;return;}
+  const sorted=[...gameScores].sort((a,b)=>b.score-a.score);
+  c.innerHTML=`<div style="margin-bottom:15px"><button class="btn danger" onclick="clearScores()">🗑️ Effacer scores</button></div>`+
+  `<table><thead><tr><th>Rang</th><th>Pseudo</th><th>Score</th><th>Date</th><th></th></tr></thead><tbody>`+
+  sorted.map((s,i)=>`<tr><td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td><strong>${s.pseudo}</strong></td><td style="color:#28a745;font-weight:bold">${s.score} pts</td><td>${s.date}</td><td><button class="action-btn delete-btn" onclick="deleteScore(${s.timestamp})">🗑️</button></td></tr>`).join('')+`</tbody></table>`;
+}
+function clearStats(){if(confirm('Effacer toutes les statistiques ?')){statistics={};saveStatistics();displayStatsTab();}}
+function clearScores(){if(confirm('Effacer tous les scores ?')){gameScores=[];saveGameScores();displayScoresTab();displayTopScores();}}
+function deleteScore(ts){gameScores=gameScores.filter(s=>s.timestamp!==ts);saveGameScores();displayScoresTab();displayTopScores();}
+function clearDatabase(){
+  if(confirm('Vider toute la base ?')){
+    database=[];statistics={};gameScores=[];
+    saveDatabase();saveStatistics();saveGameScores();
+    if(currentDbTab==='stats')displayStatsTab();
+    if(currentDbTab==='scores')displayScoresTab();
+    updateHomeCount();
+  }
+}
+
+// ── MODAL ──────────────────────────────────────────────
+function openAddModal(){currentEditIndex=-1;document.getElementById('modalTitle').textContent='Ajouter une entrée';document.getElementById('entryForm').reset();document.getElementById('entryModal').classList.add('show');}
+function editEntry(i){
+  currentEditIndex=i;const e=database[i];
+  document.getElementById('modalTitle').textContent='Modifier une entrée';
+  ['Nom','Type','PrecisionType','PrecisionType2','DateDebut','DateFin','Nationalite'].forEach(f=>{
+    document.getElementById('input'+f).value=e[f.charAt(0).toLowerCase()+f.slice(1)]||'';
+  });
+  for(let j=0;j<10;j++)document.getElementById('inputIndice'+(j+1)).value=e.indices[j]||'';
+  document.getElementById('entryModal').classList.add('show');
+}
+function closeModal(){document.getElementById('entryModal').classList.remove('show');}
+function deleteEntry(i){
+  if(confirm('Supprimer "'+database[i].nom+'" ?')){
+    const nom=database[i].nom;database.splice(i,1);
+    if(statistics[nom]){delete statistics[nom];saveStatistics();}
+    saveDatabase();
+  }
+}
+function handleFormSubmit(e){
+  e.preventDefault();
+  const indices=[];
+  for(let i=1;i<=10;i++){const v=document.getElementById('inputIndice'+i).value.trim();if(v)indices.push(v);}
+  const entry={
+    nom:document.getElementById('inputNom').value.trim(),
+    type:document.getElementById('inputType').value.trim(),
+    precisionType:document.getElementById('inputPrecisionType').value.trim(),
+    precisionType2:document.getElementById('inputPrecisionType2').value.trim(),
+    dateDebut:document.getElementById('inputDateDebut').value.trim(),
+    dateFin:document.getElementById('inputDateFin').value.trim(),
+    nationalite:document.getElementById('inputNationalite').value.trim(),
+    indices
+  };
+  if(currentEditIndex===-1)database.push(entry);else database[currentEditIndex]=entry;
+  saveDatabase();closeModal();
+}
+function handleExcelImport(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    const data=new Uint8Array(ev.target.result);
+    const wb=XLSX.read(data,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    database=[];let imp=0,skip=0;
+    rows.forEach((row,idx)=>{
+      if(idx===0)return;
+      if(row[2]&&row[3]&&row[4]&&row[5]&&row[6]&&row[7]&&row[8]&&row[10]&&row[11]&&row[12]){
+        const indices=[row[10],row[11],row[12]].map(String);
+        for(let j=13;j<=19;j++)if(row[j])indices.push(row[j].toString());
+        database.push({nom:row[2].toString().trim(),type:row[3].toString().trim(),precisionType:row[4].toString().trim(),precisionType2:row[5].toString().trim(),dateDebut:row[6].toString().trim(),dateFin:row[7].toString().trim(),nationalite:row[8].toString().trim(),indices});
+        imp++;
+      }else skip++;
+    });
+    saveDatabase();
+    alert(imp+' entrée(s) importée(s)'+(skip?' ('+skip+' ignorée(s))':''));
+  };
+  reader.readAsArrayBuffer(file);e.target.value='';
+}
+function exportToExcel(){
+  if(!database.length){alert('Base vide !');return;}
+  const data=database.map(e=>[e.nom,e.type,e.precisionType,e.precisionType2,e.dateDebut,e.dateFin,e.nationalite,...e.indices]);
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Devinettes');
+  XLSX.writeFile(wb,'devinettes.xlsx');
+}
+
+// ── SOLO GAME ──────────────────────────────────────────
+function showGameModeSelection(){
+  if(!database.length){alert('Aucune devinette disponible.');return;}
+  goToPage('game');
+  document.getElementById('gameContent').innerHTML=`
+  <div style="text-align:center;padding:60px 20px">
+    <h2 style="color:#6c8fff;font-size:2em;margin-bottom:40px">🎮 Choisissez votre mode</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:30px;max-width:800px;margin:0 auto">
+      <div style="background:rgba(108,143,255,.1);padding:35px;border-radius:20px;cursor:pointer" onclick="startGame('normal')">
+        <div style="font-size:3.5em;margin-bottom:15px">🎯</div>
+        <h3 style="color:#6c8fff;font-size:1.5em;margin-bottom:10px">Mode Normal</h3>
+        <p style="color:#888;line-height:1.6">Score max 25pts/question<br>-1pt par révélation<br>-5pts par indice<br>-2pts par mauvaise réponse</p>
+        <button class="btn success" style="margin-top:20px">Jouer</button>
+      </div>
+      <div style="background:rgba(240,147,251,.08);padding:35px;border-radius:20px;cursor:pointer" onclick="startGame('training')">
+        <div style="font-size:3.5em;margin-bottom:15px">💡</div>
+        <h3 style="color:#f093fb;font-size:1.5em;margin-bottom:10px">Mode Entraînement</h3>
+        <p style="color:#888;line-height:1.6">Toutes les infos visibles<br>3 indices à découvrir<br>Pas de points<br>Pour apprendre !</p>
+        <button class="btn purple" style="margin-top:20px">Jouer</button>
+      </div>
+    </div>
+    <button class="btn secondary" onclick="goToPage('home')" style="margin-top:30px">← Retour</button>
+  </div>`;
+}
+function startGame(mode){gameMode=mode;initGame();}
+function initGame(){currentQuestionIndex=0;totalScore=0;wrongAnswers=[];shuffleArray(database);displayQuestion();}
+function shuffleArray(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}}
+function displayQuestion(){
+  if(currentQuestionIndex>=questionsPerGame||currentQuestionIndex>=database.length){endGame();return;}
+  currentQuestion=database[currentQuestionIndex];currentPoints=25;wrongAnswers=[];
+  gameMode==='training'?displayTrainingMode():displayNormalMode();
+}
+function displayNormalMode(){
+  const q=currentQuestion;
+  document.getElementById('gameContent').innerHTML=`<div class="game-layout"><div class="game-left">
+  <div class="score">Q${currentQuestionIndex+1}/${Math.min(questionsPerGame,database.length)} | Points: <span id="currentPointsDisplay">${currentPoints}</span> | Total: ${totalScore}</div>
+  <div class="info-grid">
+    <div class="info-item"><div class="info-label">🎯 Type</div><div class="info-value">${q.type}</div></div>
+    ${mkHidden('precisionTypeVal',q.precisionType,'📝 Précision type (-1pt)',1)}
+    ${mkHidden('precisionType2Val',q.precisionType2,'📝 Précision type 2 (-1pt)',1)}
+    ${mkHidden('dateDebutVal',q.dateDebut,'📅 Date début (-1pt)',1)}
+    ${mkHidden('dateFinVal',q.dateFin,'📅 Date fin (-1pt)',1)}
+    ${!q.type.toLowerCase().includes('pays')&&!(q.precisionType&&q.precisionType.toLowerCase().includes('pays'))?mkHidden('nationaliteVal',q.nationalite,'🌍 Nationalité (-1pt)',1):''}
+  </div>
+  <div class="indices-section"><div class="indices-title">💡 Indices (-5pts chacun)</div><div id="indicesContainer"></div></div>
+  </div><div class="game-right"><div class="answer-section">
+  <div class="answer-controls">
+    <input type="text" class="answer-input" id="answerInput" placeholder="Votre réponse..." autocomplete="off">
+    <div class="suggestions-list" id="suggestionsList"></div>
+    <div class="answer-buttons"><button class="btn" style="flex:1" onclick="checkAnswer()">Valider ✅</button></div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+  <div class="wrong-answers"><div class="wrong-answers-title">❌ Mauvaises (<span id="wrongCount">0</span>)</div><div id="wrongAnswersList"><div style="color:#666;font-style:italic;font-size:.9em">Aucune pour l'instant</div></div></div>
+  </div>
+  <button class="btn success" id="nextQuestionBtn" style="display:none;width:100%;margin-top:10px" onclick="nextQuestion()">Question suivante ➡️</button>
+  </div></div>`;
+  displayIndices(false);setupAnswerInput(false);
+}
+function mkHidden(id,val,label,pts){
+  return`<div class="info-item"><div class="info-label">${label}</div><div class="info-value hidden" id="${id}">${val||'Non spécifié'}</div><button class="reveal-btn" onclick="revealField('${id}',this,${pts})">Révéler</button></div>`;
+}
+function displayTrainingMode(){
+  const q=currentQuestion;
+  const isCountry=q.type.toLowerCase().includes('pays');
+  const isPaysPrec=q.precisionType&&q.precisionType.toLowerCase().includes('pays');
+  document.getElementById('gameContent').innerHTML=`<div class="game-layout"><div class="game-left">
+  <div class="score" style="color:#f093fb">Mode Entraînement — Q${currentQuestionIndex+1}/${Math.min(questionsPerGame,database.length)}</div>
+  <div class="info-grid">
+    <div class="info-item"><div class="info-label">🎯 Type</div><div class="info-value">${q.type}</div></div>
+    <div class="info-item"><div class="info-label">📝 Précision type</div><div class="info-value">${q.precisionType||'Non spécifié'}</div></div>
+    <div class="info-item"><div class="info-label">📝 Précision type 2</div><div class="info-value">${q.precisionType2||'Non spécifié'}</div></div>
+    <div class="info-item"><div class="info-label">📅 Date début</div><div class="info-value">${q.dateDebut||'Non spécifié'}</div></div>
+    <div class="info-item"><div class="info-label">📅 Date fin</div><div class="info-value">${q.dateFin||'Non spécifié'}</div></div>
+    ${!isCountry&&!isPaysPrec?`<div class="info-item"><div class="info-label">🌍 Nationalité</div><div class="info-value">${q.nationalite||'Non spécifié'}</div></div>`:''}
+  </div>
+  <div class="indices-section"><div class="indices-title">💡 Indices</div><div id="indicesContainer"></div></div>
+  </div><div class="game-right"><div class="answer-section">
+  <div class="answer-controls">
+    <input type="text" class="answer-input" id="answerInput" placeholder="Votre réponse..." autocomplete="off">
+    <div class="suggestions-list" id="suggestionsList"></div>
+    <div class="answer-buttons">
+      <button class="btn success" style="flex:1" onclick="checkAnswerTraining()">✅ Valider</button>
+      <button class="btn secondary" style="flex:1" onclick="skipQuestion()">⏭️ Passer</button>
+    </div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+  <div class="wrong-answers"><div class="wrong-answers-title">❌ Mauvaises (<span id="wrongCount">0</span>)</div><div id="wrongAnswersList"><div style="color:#666;font-style:italic;font-size:.9em">Aucune pour l'instant</div></div></div>
+  </div>
+  <button class="btn success" id="nextQuestionBtn" style="display:none;width:100%;margin-top:10px" onclick="nextQuestion()">Question suivante ➡️</button>
+  </div></div>`;
+  displayIndices(true);setupAnswerInput(false);
+}
+function displayIndices(training){
+  const c=document.getElementById('indicesContainer');
+  if(!currentQuestion.indices.length){c.innerHTML='<div class="indice-item">Aucun indice</div>';return;}
+  const sel=[...currentQuestion.indices].sort(()=>Math.random()-.5).slice(0,3);
+  c.innerHTML=sel.map((ind,i)=>`<div class="indice-item"><div class="indice-label">Indice ${i+1}</div>
+  <div class="indice-value hidden" id="indice${i}">${ind}</div>
+  <button class="reveal-btn" onclick="${training?`revealFieldTraining('indice${i}',this)`:`revealField('indice${i}',this,5)`}">${training?'Révéler':'Révéler (-5pts)'}</button>
+  </div>`).join('');
+}
+function revealField(id,btn,pts){
+  document.getElementById(id).classList.remove('hidden');btn.disabled=true;
+  currentPoints=Math.max(0,currentPoints-pts);
+  const d=document.getElementById('currentPointsDisplay');if(d)d.textContent=currentPoints;
+  if(currentPoints===0)showAnswerAuto();
+}
+function revealFieldTraining(id,btn){document.getElementById(id).classList.remove('hidden');btn.disabled=true;}
+function setupAnswerInput(multi){
+  const inp=document.getElementById('answerInput');
+  const sug=document.getElementById('suggestionsList');
+  if(!inp)return;inp.focus();
+  inp.addEventListener('input',function(){
+    const v=this.value.trim().toLowerCase();
+    if(!v){sug.classList.remove('show');return;}
+    const matches=database.filter(it=>it.nom.toLowerCase().includes(v));
+    if(!matches.length){sug.classList.remove('show');return;}
+    sug.innerHTML=matches.map(it=>`<div class="suggestion-item">${it.nom}</div>`).join('');
+    sug.classList.add('show');
+    sug.querySelectorAll('.suggestion-item').forEach(d=>d.addEventListener('click',function(){inp.value=this.textContent;sug.classList.remove('show');}));
+  });
+  inp.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();
+      const first=sug.querySelector('.suggestion-item');
+      if(sug.classList.contains('show')&&first){inp.value=first.textContent;sug.classList.remove('show');}
+      multi?checkAnswerMulti():gameMode==='training'?checkAnswerTraining():checkAnswer();
+    }
+  });
+}
+function checkAnswer(){
+  const inp=document.getElementById('answerInput');const ua=inp.value.trim();if(!ua)return;
+  if(!database.some(it=>it.nom.toLowerCase()===ua.toLowerCase())){alert('Réponse introuvable.');return;}
+  if(ua.toLowerCase()===currentQuestion.nom.toLowerCase()){
+    totalScore+=currentPoints;updateStatistics(currentQuestion.nom,true);
+    showFeedback('✅ Correct ! +'+currentPoints+' pts. C\'était "'+currentQuestion.nom+'" !','correct');
+    endCurrentQuestion();
+  }else{
+    currentPoints=Math.max(0,currentPoints-2);
+    const d=document.getElementById('currentPointsDisplay');if(d)d.textContent=currentPoints;
+    if(currentPoints===0){showAnswerAuto();return;}
+    if(!wrongAnswers.includes(ua))wrongAnswers.push(ua);
+    updateWrongAnswersList();inp.value='';inp.focus();
+  }
+}
+function checkAnswerTraining(){
+  const inp=document.getElementById('answerInput');const ua=inp.value.trim();if(!ua)return;
+  if(!database.some(it=>it.nom.toLowerCase()===ua.toLowerCase())){alert('Réponse introuvable.');return;}
+  if(ua.toLowerCase()===currentQuestion.nom.toLowerCase()){
+    showFeedback('✅ Correct ! C\'était "'+currentQuestion.nom+'" !','correct');endCurrentQuestion();
+  }else{
+    if(!wrongAnswers.includes(ua))wrongAnswers.push(ua);
+    updateWrongAnswersList();inp.value='';inp.focus();
+  }
+}
+function skipQuestion(){showFeedback('⏭️ Passé ! C\'était "'+currentQuestion.nom+'"','');endCurrentQuestion();}
+function showAnswerAuto(){updateStatistics(currentQuestion.nom,false);showFeedback('❌ 0 pts ! Réponse : "'+currentQuestion.nom+'"','');document.getElementById('feedback').style.cssText='display:block;background:#dc3545;color:#fff';}
+function showFeedback(msg,cls){const f=document.getElementById('feedback');if(!f)return;f.textContent=msg;f.className='feedback'+(cls?' '+cls:'');f.style.display='block';}
+function endCurrentQuestion(){
+  const inp=document.getElementById('answerInput');if(inp)inp.disabled=true;
+  const sb=document.getElementById('submitAnswerBtn');if(sb)sb.style.display='none';
+  const nq=document.getElementById('nextQuestionBtn');if(nq)nq.style.display='block';
+  document.querySelectorAll('.info-value.hidden,.indice-value.hidden').forEach(el=>el.classList.remove('hidden'));
+  document.querySelectorAll('.reveal-btn').forEach(b=>b.disabled=true);
+}
+function updateWrongAnswersList(){
+  const wc=document.getElementById('wrongCount');if(wc)wc.textContent=wrongAnswers.length;
+  const wl=document.getElementById('wrongAnswersList');if(!wl)return;
+  wl.innerHTML=wrongAnswers.length?wrongAnswers.map(a=>`<div class="wrong-answer-item">${a}</div>`).join(''):'<div style="color:#666;font-style:italic;font-size:.9em">Aucune pour l\'instant</div>';
+}
+function updateStatistics(nom,correct){
+  if(!statistics[nom])statistics[nom]={correct:0,wrong:0};
+  statistics[nom][correct?'correct':'wrong']++;saveStatistics();
+}
+function nextQuestion(){currentQuestionIndex++;displayQuestion();}
+function endGame(){
+  const max=Math.min(questionsPerGame,database.length)*25;
+  const pct=Math.round(totalScore/max*100);
+  document.getElementById('gameContent').innerHTML=`
+  <div style="text-align:center;padding:60px 20px">
+    <h2 style="color:#6c8fff;font-size:2em;margin-bottom:20px">🎉 Partie terminée !</h2>
+    <div style="font-size:1.8em;margin-bottom:15px">Score : <strong style="color:#6c8fff">${totalScore}</strong> / ${max}</div>
+    <div style="font-size:1.3em;color:#28a745;margin-bottom:30px">Performance : ${pct}%</div>
+    ${gameMode==='normal'?`<div style="max-width:400px;margin:0 auto 20px">
+      <input type="text" id="pseudoInput" placeholder="Votre pseudo..." style="width:100%;padding:12px;border:2px solid #6c8fff;border-radius:10px;font-size:1em;margin-bottom:10px;background:#2a2a3e;color:#e0e0e0">
+      <button class="btn success" onclick="saveScore()" style="width:100%">💾 Sauvegarder</button>
+    </div>`:''}
+    <button class="btn success" onclick="initGame()" style="margin-right:10px">🔄 Rejouer</button>
+    <button class="btn" onclick="goToPage('home')">🏠 Accueil</button>
+  </div>`;
+}
+function saveScore(){
+  const p=document.getElementById('pseudoInput').value.trim();if(!p){alert('Entrez un pseudo !');return;}
+  const now=new Date();
+  gameScores.push({pseudo:p,score:totalScore,date:now.toLocaleDateString('fr-FR')+' '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),timestamp:now.getTime()});
+  saveGameScores();
+  const btn=document.querySelector('button[onclick="saveScore()"]');
+  if(btn){btn.textContent='✅ Sauvegardé !';btn.disabled=true;}
+  document.getElementById('pseudoInput').disabled=true;
+}
+
+// ══════════════════════════════════════════════════════
+// MULTIJOUEUR
+// ══════════════════════════════════════════════════════
+function genCode(){return Math.random().toString(36).substr(2,6).toUpperCase();}
+function genId(){return Math.random().toString(36).substr(2,10);}
+
+function leaveMulti(){
+  clearMultiListeners();clearInterval(timerInterval);
+  if(roomCode&&myId&&fbReady){
+    db.ref('rooms/'+roomCode+'/players/'+myId).remove();
+  }
+  roomCode='';myId=null;isHost=false;multiPhase='lobby';multiPlayers={};
+  goToPage('home');
+}
+
+function clearMultiListeners(){
+  multiListeners.forEach(({ref,fn})=>ref.off('value',fn));
+  multiListeners=[];
+}
+
+function addListener(path,fn){
+  if(!fbReady||!db)return;
+  const r=db.ref(path);
+  r.on('value',fn);
+  multiListeners.push({ref:r,fn});
+}
+
+function showMultiLobby(){
+  if(!fbReady){
+    document.getElementById('multiContent').innerHTML=`
+    <div style="text-align:center;padding:40px">
+      <div style="font-size:3em;margin-bottom:20px">⚠️</div>
+      <h3 style="color:#ffc107;margin-bottom:15px">Firebase non connecté</h3>
+      <p style="color:#888;margin-bottom:20px">Vérifiez votre connexion internet et rechargez la page.</p>
+      <button class="btn" onclick="initFirebase();showMultiLobby()">🔄 Réessayer</button>
+    </div>`;
+    return;
+  }
+  document.getElementById('multiContent').innerHTML=`
+  <div class="multi-container">
+    <div class="multi-card">
+      <h3>🏠 Créer une salle</h3>
+      <p style="color:#888;margin-bottom:15px">Créez une nouvelle partie et partagez le code avec vos amis.</p>
+      <input type="text" class="multi-input" id="createPseudo" placeholder="Votre pseudo..." style="letter-spacing:normal;text-transform:none">
+      <button class="btn purple" onclick="console.log('clic'); try { createRoom(); } catch(e) { alert('Erreur: ' + e.message); }" style="width:100%">Créer la salle ➕</button>
+    </div>
+    <div class="multi-card">
+      <h3>🔗 Rejoindre une salle</h3>
+      <p style="color:#888;margin-bottom:15px">Entrez le code de la salle.</p>
+      <input type="text" class="multi-input" id="joinPseudo" placeholder="Votre pseudo..." style="letter-spacing:normal;text-transform:none">
+      <input type="text" class="multi-input" id="joinCode" placeholder="CODE DE SALLE" maxlength="6">
+      <button class="btn success" onclick="joinRoom()" style="width:100%">Rejoindre ▶️</button>
+    </div>
+  </div>`;
+}
+
+function createRoom(){
+  const pseudo=document.getElementById('createPseudo').value.trim();
+  if(!pseudo){alert('Entrez votre pseudo !');return;}
+  if(!fbReady||!db){
+    alert('Firebase non prêt. Statut : fbReady='+fbReady+' db='+(db?'ok':'null')+'\nEssayez de patienter 2 secondes et réessayez.');
+    initFirebase();
+    return;
+  }
+  myId=genId();myPseudo=pseudo;isHost=true;roomCode=genCode();
+  const questions=getMultiQuestions();
+  db.ref('rooms/'+roomCode).set({host:myId,status:'lobby',currentQ:-1,questions,createdAt:Date.now()})
+  .then(()=>db.ref('rooms/'+roomCode+'/players/'+myId).set({pseudo,score:0,answered:false,joinedAt:Date.now()}))
+  .then(()=>showWaitingRoom())
+  .catch(e=>alert('Erreur création salle : '+e.message));
+}
+
+function joinRoom(){
+  const pseudo=document.getElementById('joinPseudo').value.trim();
+  const code=document.getElementById('joinCode').value.trim().toUpperCase();
+  if(!pseudo||!code){alert('Remplissez pseudo et code !');return;}
+  if(!fbReady){alert('Firebase non connecté !');return;}
+  myId=genId();myPseudo=pseudo;isHost=false;roomCode=code;
+  db.ref('rooms/'+code).once('value').then(snap=>{
+    if(!snap.exists()){alert('Salle introuvable !');return;}
+    const room=snap.val();
+    if(room.status==='finished'){alert('Cette partie est terminée !');return;}
+    db.ref('rooms/'+code+'/players/'+myId).set({pseudo,score:0,answered:false,joinedAt:Date.now()})
+    .then(()=>showWaitingRoom())
+    .catch(e=>alert('Erreur : '+e.message));
+  }).catch(e=>alert('Erreur : '+e.message));
+}
+
+function getMultiQuestions(){
+  return [...database].sort(()=>Math.random()-.5).slice(0,questionsPerGame).map(q=>({
+    nom:q.nom,type:q.type,precisionType:q.precisionType,precisionType2:q.precisionType2,
+    dateDebut:q.dateDebut,dateFin:q.dateFin,nationalite:q.nationalite,
+    indices:q.indices.sort(()=>Math.random()-.5).slice(0,3)
+  }));
+}
+
+function showWaitingRoom(){
+  multiPhase='lobby';
+  document.getElementById('multiContent').innerHTML=`
+  <div class="multi-container">
+    <div class="multi-card" style="text-align:center">
+      <h3>⏳ Salle d'attente</h3>
+      <p style="color:#888;margin-bottom:10px">Partagez ce code avec vos amis :</p>
+      <div class="room-code" id="roomCodeDisplay" onclick="copyCode()" title="Cliquer pour copier">${roomCode}</div>
+      <p style="color:#888;font-size:.8em;margin-bottom:20px">🖱️ Cliquez pour copier</p>
+      <div id="playersList"></div>
+      ${isHost?`<button class="btn success" id="startBtn" onclick="hostStartGame()" style="margin-top:20px;width:100%;font-size:1.1em" disabled>▶️ Lancer la partie</button>`:'<p style="color:#888;margin-top:20px">En attente du lancement par l\'hôte…</p>'}
+    </div>
+  </div>`;
+  clearMultiListeners();
+  addListener('rooms/'+roomCode+'/players',snap=>{
+    const players=snap.val()||{};multiPlayers=players;
+    renderPlayersList(players);
+    const count=Object.keys(players).length;
+    const btn=document.getElementById('startBtn');
+    if(btn){btn.disabled=count<2;btn.textContent=count>=2?'▶️ Lancer ('+count+' joueurs)':'⏳ Attente (min 2 joueurs)';}
+  });
+  addListener('rooms/'+roomCode+'/status',snap=>{
+    const st=snap.val();
+    if(st==='playing'&&multiPhase==='lobby'){multiPhase='playing';startMultiGame();}
+    if(st==='finished')endMultiGame();
+  });
+}
+
+function renderPlayersList(players){
+  const c=document.getElementById('playersList');if(!c)return;
+  c.innerHTML=Object.entries(players).map(([id,p])=>`
+  <div class="player-item"><span>${p.pseudo}</span>${id===myId?'<span class="player-badge">Vous</span>':''}</div>`).join('');
+}
+
+function copyCode(){
+  navigator.clipboard.writeText(roomCode).then(()=>{
+    const el=document.getElementById('roomCodeDisplay');
+    if(el){el.textContent='✅ Copié !';setTimeout(()=>el.textContent=roomCode,1500);}
+  });
+}
+
+function hostStartGame(){
+  db.ref('rooms/'+roomCode).update({status:'playing',currentQ:0,questionStartTime:Date.now()});
+}
+
+function startMultiGame(){
+  clearMultiListeners();multiTotalScore=0;
+  addListener('rooms/'+roomCode+'/currentQ',snap=>{
+    const idx=snap.val();if(idx===null||idx<0)return;
+    multiQuestionIdx=idx;fetchAndShowMultiQuestion(idx);
+  });
+  addListener('rooms/'+roomCode+'/status',snap=>{
+    if(snap.val()==='finished')endMultiGame();
+  });
+}
+
+function fetchAndShowMultiQuestion(idx){
+  db.ref('rooms/'+roomCode).once('value').then(snap=>{
+    const room=snap.val();if(!room)return;
+    const questions=room.questions||[];
+    if(idx>=questions.length){endMultiGame();return;}
+    multiCurrentQ=questions[idx];
+    // Les indices sont déjà mélangés à la création de la salle, identiques pour tous
+    multiCurrentQ._shuffledIndices=multiCurrentQ.indices;
+    multiAnswered=false;
+    db.ref('rooms/'+roomCode+'/players/'+myId).update({answered:false});
+    showMultiQuestion(multiCurrentQ,idx,questions.length,room.questionStartTime||Date.now(),room.players||{});
+  });
+}
+
+function showMultiQuestion(q,idx,total,startTime,players){
+  const elapsed=Math.floor((Date.now()-startTime)/1000);
+  const remaining=Math.max(0,TIMER_SECONDS-elapsed);
+  const isCountry=q.type.toLowerCase().includes('pays');
+  const isPaysPrec=q.precisionType&&q.precisionType.toLowerCase().includes('pays');
+  const nbPlayers=Object.keys(players).length;
+  document.getElementById('multiContent').innerHTML=`
+  <div class="game-layout"><div class="game-left">
+    <div class="score" style="color:#f093fb">Multi — Q${idx+1}/${total} | Mon score: <span id="multiScoreDisplay">${multiTotalScore}</span></div>
+    <div class="timer-text">⏱️ <span id="timerDisplay">${remaining}</span>s
+      <span style="font-size:.7em;color:#888;margin-left:10px">Indice 1 à 30s • Indice 2 à 20s • Indice 3 à 10s</span>
+    </div>
+    <div class="timer-bar"><div class="timer-fill" id="timerFill" style="width:${remaining/TIMER_SECONDS*100}%"></div></div>
+    <div class="info-grid">
+      <div class="info-item"><div class="info-label">🎯 Type</div><div class="info-value">${q.type}</div></div>
+      <div class="info-item"><div class="info-label">📝 Précision type</div><div class="info-value">${q.precisionType||'Non spécifié'}</div></div>
+      <div class="info-item"><div class="info-label">📝 Précision type 2</div><div class="info-value">${q.precisionType2||'Non spécifié'}</div></div>
+      <div class="info-item"><div class="info-label">📅 Date début</div><div class="info-value">${q.dateDebut||'Non spécifié'}</div></div>
+      <div class="info-item"><div class="info-label">📅 Date fin</div><div class="info-value">${q.dateFin||'Non spécifié'}</div></div>
+      ${!isCountry&&!isPaysPrec?`<div class="info-item"><div class="info-label">🌍 Nationalité</div><div class="info-value">${q.nationalite||'Non spécifié'}</div></div>`:''}
+    </div>
+    <div class="indices-section">
+      <div class="indices-title">💡 Indices (révélation automatique)</div>
+      <div id="multiIndices">${renderMultiIndices(multiCurrentQ._shuffledIndices||q.indices)}</div>
+    </div>
+    <div class="multi-scoreboard"><h4>👥 Joueurs (${nbPlayers})</h4><div id="multiScoreboard"></div></div>
+  </div>
+  <div class="game-right"><div class="answer-section">
+    <div class="answer-controls">
+      <input type="text" class="answer-input" id="answerInput" placeholder="Votre réponse..." autocomplete="off" ${multiAnswered?'disabled':''}>
+      <div class="suggestions-list" id="suggestionsList"></div>
+      <div class="answer-buttons">
+        <button class="btn success" id="multiSubmitBtn" style="flex:1" onclick="checkAnswerMulti()" ${multiAnswered?'disabled':''}>✅ Valider</button>
+      </div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+    <div style="background:#2a2a3e;border-radius:10px;padding:12px;margin-top:10px;font-size:.85em;color:#888">
+      <div style="color:#6c8fff;font-weight:bold;margin-bottom:5px">📊 Calcul des points</div>
+      <div>✅ Bonne réponse : 10pts</div>
+      <div>🏆 Bonus rapidité : +${nbPlayers}pts (1er) / +${Math.max(0,nbPlayers-1)}pts (2ème)...</div>
+      <div>💡 Malus indices : -3pts par indice affiché</div>
+    </div>
+    <div class="wrong-answers" style="margin-top:10px"><div class="wrong-answers-title">❌ Mauvaises (<span id="wrongCount">0</span>)</div>
+    <div id="wrongAnswersList"><div style="color:#666;font-style:italic;font-size:.9em">Aucune pour l'instant</div></div></div>
+  </div></div></div>`;
+  setupAnswerInput(true);
+  startMultiTimer(remaining,startTime,q,nbPlayers);
+  renderMultiScoreboard(players);
+  listenMultiPlayers();
+  // Révéler les indices déjà affichés si on arrive en retard
+  if(remaining<=30)revealIndiceLocal(0);
+  if(remaining<=20)revealIndiceLocal(1);
+  if(remaining<=10)revealIndiceLocal(2);
+}
+
+function mkMultiHidden(id,val,label){
+  return`<div class="info-item"><div class="info-label">${label}</div><div class="info-value hidden" id="${id}">${val||'Non spécifié'}</div>
+  ${isHost?`<button class="reveal-btn" onclick="revealMultiField('${id}',this)">Révéler</button>`:''}</div>`;
+}
+
+function renderMultiIndices(indices){
+  if(!indices||!indices.length)return'<div class="indice-item">Aucun indice</div>';
+  return indices.map((ind,i)=>`<div class="indice-item">
+    <div class="indice-label">Indice ${i+1} <span style="color:#f093fb;font-size:.8em">(révélé à ${[30,20,10][i]}s)</span></div>
+    <div class="indice-value hidden" id="mInd${i}">${ind}</div>
+  </div>`).join('');
+}
+
+function revealIndiceLocal(i){
+  const el=document.getElementById('mInd'+i);
+  if(el)el.classList.remove('hidden');
+}
+
+function listenMultiPlayers(){
+  addListener('rooms/'+roomCode+'/players',snap=>{
+    const players=snap.val()||{};multiPlayers=players;renderMultiScoreboard(players);
+    if(isHost){
+      const all=Object.values(players).every(p=>p.answered);
+      const nqBtn=document.getElementById('nextQBtn');
+      if(all&&nqBtn)nqBtn.style.display='block';
+    }
+  });
+  addListener('rooms/'+roomCode+'/revealedFields',snap=>{
+    const fields=snap.val()||{};
+    Object.keys(fields).forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){el.classList.remove('hidden');const btn=el.parentElement.querySelector('.reveal-btn');if(btn)btn.disabled=true;}
+    });
+  });
+}
+
+function renderMultiScoreboard(players){
+  const c=document.getElementById('multiScoreboard');if(!c)return;
+  const sorted=Object.entries(players).sort((a,b)=>b[1].score-a[1].score);
+  c.innerHTML=sorted.map(([id,p])=>`
+  <div class="sb-item ${id===myId?'me':''} ${p.answered?'answered':''}">
+    <span>${p.pseudo}${id===myId?' (moi)':''}</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-weight:bold;color:#6c8fff">${p.score} pts</span>
+      ${p.answered?'<span class="answered-tag">✅</span>':'<span class="waiting-tag">…</span>'}
+    </div>
+  </div>`).join('');
+}
+
+function revealMultiField(id,btn){
+  btn.disabled=true;
+  const update={};update[id]=true;
+  db.ref('rooms/'+roomCode+'/revealedFields').update(update);
+}
+
+function startMultiTimer(remaining,startTime,q,nbPlayers){
+  clearInterval(timerInterval);let secs=remaining;
+  timerInterval=setInterval(()=>{
+    secs--;
+    const disp=document.getElementById('timerDisplay');
+    const fill=document.getElementById('timerFill');
+    if(disp)disp.textContent=Math.max(0,secs);
+    if(fill){fill.style.width=(Math.max(0,secs)/TIMER_SECONDS*100)+'%';if(secs<=10)fill.classList.add('urgent');}
+    // Révélation automatique des indices
+    if(secs===30)revealIndiceLocal(0);
+    if(secs===20)revealIndiceLocal(1);
+    if(secs===10)revealIndiceLocal(2);
+    if(secs<=0){
+      clearInterval(timerInterval);
+      // Afficher la bonne réponse en grand
+      showMultiAnswer(multiCurrentQ.nom);
+      if(!multiAnswered){
+        showFeedback('⏰ Temps écoulé ! — 0 point','');
+        document.getElementById('feedback').style.cssText='display:block;background:#dc3545;color:#fff';
+        multiAnswered=true;
+        const inp=document.getElementById('answerInput');if(inp)inp.disabled=true;
+        const btn=document.getElementById('multiSubmitBtn');if(btn)btn.disabled=true;
+      }
+      // Compte à rebours 3s visible, puis question suivante (tous les clients)
+      showCountdown(5,()=>{
+        if(isHost)hostNextQuestion();
+      });
+    }
+  },1000);
+}
+
+function showMultiAnswer(nom){
+  // Afficher la réponse en grand entre le timer et les mauvaises réponses
+  const existing=document.getElementById('multiAnswerReveal');
+  if(existing)return;
+  const answerDiv=document.createElement('div');
+  answerDiv.id='multiAnswerReveal';
+  answerDiv.style.cssText='background:linear-gradient(135deg,rgba(40,167,69,.2),rgba(32,201,151,.2));border:2px solid #28a745;border-radius:12px;padding:15px;margin-bottom:10px;text-align:center';
+  answerDiv.innerHTML=`<div style="color:#888;font-size:.85em;margin-bottom:8px">✅ La réponse était</div>
+  <div style="color:#28a745;font-size:2.4em;font-weight:bold;letter-spacing:1px">${nom}</div>`;
+  const wrongDiv=document.querySelector('.wrong-answers');
+  if(wrongDiv)wrongDiv.parentElement.insertBefore(answerDiv,wrongDiv);
+}
+
+function showCountdown(secs, callback){
+  const overlay=document.createElement('div');
+  overlay.id='countdownOverlay';
+  overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:500;pointer-events:none';
+  overlay.innerHTML=`<div style="background:rgba(30,30,46,.92);border:2px solid #f093fb;border-radius:20px;padding:30px 60px;text-align:center">
+    <div style="color:#888;font-size:1em;margin-bottom:10px">Prochaine question dans</div>
+    <div id="countdownNum" style="color:#f093fb;font-size:4em;font-weight:bold">${secs}</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  let s=secs;
+  const iv=setInterval(()=>{
+    s--;
+    const el=document.getElementById('countdownNum');
+    if(el)el.textContent=s;
+    if(s<=0){clearInterval(iv);overlay.remove();callback();}
+  },1000);
+}
+
+function checkAnswerMulti(){
+  if(multiAnswered)return;
+  const inp=document.getElementById('answerInput');const ua=inp.value.trim();if(!ua)return;
+  if(!database.some(it=>it.nom.toLowerCase()===ua.toLowerCase())){alert('Réponse introuvable.');return;}
+  if(ua.toLowerCase()===multiCurrentQ.nom.toLowerCase()){
+    // Compter les indices affichés au moment de la réponse
+    let indicesVus=0;
+    for(let i=0;i<3;i++){const el=document.getElementById('mInd'+i);if(el&&!el.classList.contains('hidden'))indicesVus++;}
+    const malusIndices=indicesVus*3;
+    db.ref('rooms/'+roomCode+'/players').once('value').then(snap=>{
+      const players=snap.val()||{};
+      const nbPlayers=Object.keys(players).length;
+      const nbDejaRepondu=Object.values(players).filter(p=>p.answered).length;
+      const bonusRapidite=Math.max(0,nbPlayers-nbDejaRepondu);
+      const pts=Math.max(0,10+bonusRapidite-malusIndices);
+      multiTotalScore+=pts;
+      showFeedback(`✅ Correct ! +${pts}pts (10 base +${bonusRapidite} rapidité -${malusIndices} indices)`,'correct');
+      const sd=document.getElementById('multiScoreDisplay');if(sd)sd.textContent=multiTotalScore;
+      multiAnswered=true;
+      // Désactiver l'input mais NE PAS arrêter le timer
+      const inp2=document.getElementById('answerInput');if(inp2)inp2.disabled=true;
+      const btn=document.getElementById('multiSubmitBtn');if(btn)btn.disabled=true;
+      const prev=(players[myId]?.score)||0;
+      db.ref('rooms/'+roomCode+'/players/'+myId).update({answered:true,score:prev+pts});
+    });
+  }else{
+    if(!wrongAnswers.includes(ua))wrongAnswers.push(ua);
+    updateWrongAnswersList();inp.value='';inp.focus();
+  }
+}
+
+function endMultiQuestion(){
+  const inp=document.getElementById('answerInput');if(inp)inp.disabled=true;
+  const btn=document.getElementById('multiSubmitBtn');if(btn)btn.disabled=true;
+  clearInterval(timerInterval);
+  document.querySelectorAll('.info-value.hidden,.indice-value.hidden').forEach(el=>el.classList.remove('hidden'));
+  document.querySelectorAll('.reveal-btn').forEach(b=>b.disabled=true);
+  if(isHost){const nqBtn=document.getElementById('nextQBtn');if(nqBtn)nqBtn.style.display='block';}
+}
+
+function hostNextQuestion(){
+  db.ref('rooms/'+roomCode+'/questions').once('value').then(snap=>{
+    const qs=snap.val()||[];const nextIdx=multiQuestionIdx+1;
+    if(nextIdx>=qs.length){
+      db.ref('rooms/'+roomCode).update({status:'finished'});
+    }else{
+      db.ref('rooms/'+roomCode+'/players').once('value').then(pSnap=>{
+        const players=pSnap.val()||{};const updates={};
+        Object.keys(players).forEach(id=>{updates['rooms/'+roomCode+'/players/'+id+'/answered']=false;});
+        updates['rooms/'+roomCode+'/currentQ']=nextIdx;
+        updates['rooms/'+roomCode+'/questionStartTime']=Date.now();
+        updates['rooms/'+roomCode+'/revealedFields']=null;
+        db.ref().update(updates);
+      });
+    }
+  });
+}
+
+function endMultiGame(){
+  clearInterval(timerInterval);clearMultiListeners();multiPhase='finished';
+  db.ref('rooms/'+roomCode+'/players').once('value').then(snap=>{
+    const players=snap.val()||{};
+    const sorted=Object.entries(players).sort((a,b)=>b[1].score-a[1].score);
+    document.getElementById('multiContent').innerHTML=`
+    <div style="text-align:center;padding:40px 20px;max-width:600px;margin:0 auto">
+      <h2 style="color:#f093fb;font-size:2em;margin-bottom:20px">🎉 Partie terminée !</h2>
+      <div style="background:#2a2a3e;border-radius:16px;padding:30px;margin-bottom:25px">
+        <h3 style="color:#6c8fff;margin-bottom:20px">🏆 Classement final</h3>
+        ${sorted.map(([id,p],i)=>{
+          const m=i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
+          return`<div class="sb-item ${id===myId?'me':''}" style="padding:12px 15px;font-size:1em;margin-bottom:8px">
+            <span style="font-size:1.3em;margin-right:10px">${m}</span>
+            <span style="flex:1;font-weight:${id===myId?'bold':'normal'}">${p.pseudo}${id===myId?' (vous)':''}</span>
+            <span style="font-weight:bold;color:#28a745;font-size:1.1em">${p.score} pts</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <button class="btn purple" onclick="showMultiLobby()" style="font-size:1.1em;margin-right:10px">🔄 Nouvelle partie</button>
+      <button class="btn secondary" onclick="leaveMulti()" style="font-size:1.1em">🏠 Accueil</button>
+    </div>`;
+  });
+}
+</script>
+</body>
+</html>
